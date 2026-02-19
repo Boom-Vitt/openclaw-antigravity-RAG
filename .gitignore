@@ -1,0 +1,19 @@
+# Node modules (if ever installed locally)
+node_modules/
+package-lock.json
+
+# macOS
+.DS_Store
+._*
+
+# Logs
+*.log
+/tmp
+
+# Editor
+.vscode/
+.idea/
+
+# Secrets backup (never commit raw keys)
+*.env
+.env*

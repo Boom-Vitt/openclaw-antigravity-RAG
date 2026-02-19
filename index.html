@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="เว็บไซต์สำหรับสร้าง Vector Embeddings จากเอกสารภาษาไทย รองรับไฟล์ .txt และ .docx" />
+  <title>OpenClaw — Thai Document Embeddings</title>
+  <link rel="stylesheet" href="styles.css" />
+  <!-- mammoth.js for Word (.docx) extraction -->
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+  <!-- Supabase JS client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+
+<body>
+
+  <!-- Ambient background orbs -->
+  <div class="orb orb-1" aria-hidden="true"></div>
+  <div class="orb orb-2" aria-hidden="true"></div>
+
+  <div class="app-wrapper">
+
+    <!-- ── Header ── -->
+    <header class="header fade-up">
+      <div class="header-badge">
+        <span class="dot"></span>
+        Vector Embedding Engine · phaya.io
+      </div>
+      <h1>เปลี่ยนเอกสารไทย<br />เป็น Vector Embeddings</h1>
+      <p>อัปโหลดไฟล์ข้อความเพื่อสร้าง embeddings และบันทึกลง Supabase สำหรับระบบ RAG</p>
+      <div style="margin-top:16px;">
+        <a href="chat.html" class="btn btn-secondary" style="text-decoration:none;">💬 ไปหน้าแชท RAG →</a>
+      </div>
+    </header>
+
+    <!-- ── Step 1: API Config ── -->
+    <section class="section card fade-up" style="animation-delay:80ms">
+      <div class="card-title">
+        <span class="icon">🔑</span>
+        ขั้นตอนที่ 1 — ตั้งค่า API
+        <span id="supabase-status" class="supabase-badge">⏳ กำลังตรวจสอบ Supabase…</span>
+      </div>
+
+      <div class="config-row">
+        <!-- API Key -->
+        <div>
+          <label for="api-key">phaya.io API Key</label>
+          <div class="input-wrapper">
+            <input type="password" id="api-key" placeholder="pk_…" autocomplete="off" spellcheck="false" />
+            <button class="toggle-btn" id="toggle-api-key" type="button" aria-label="แสดง/ซ่อน API Key">👁</button>
+          </div>
+        </div>
+
+        <!-- Model display (fixed) -->
+        <div>
+          <label>Embedding Model</label>
+          <div class="model-info-box" id="model-display">…</div>
+        </div>
+
+        <!-- Chunk settings button -->
+        <div>
+          <label>&nbsp;</label>
+          <button class="btn btn-secondary" type="button" onclick="toggleChunkSettings()">⚙️ ตั้งค่า Chunk</button>
+        </div>
+      </div>
+
+      <!-- Chunk settings (collapsible) -->
+      <div id="chunk-settings" style="display:none; margin-top:16px;">
+        <div class="chunk-row">
+          <div>
+            <label for="chunk-size">ขนาด Chunk (ตัวอักษร)</label>
+            <input type="text" id="chunk-size" value="500" />
+          </div>
+          <div>
+            <label for="chunk-overlap">Overlap (ตัวอักษร)</label>
+            <input type="text" id="chunk-overlap" value="50" />
+          </div>
+        </div>
+        <p style="font-size:12px;color:var(--text-muted);margin-top:8px;">
+          ตัวอย่าง: ขนาด 500 + overlap 50 → ข้อความ 1,000 ตัวอักษร = ≈ 2 chunks
+        </p>
+      </div>
+    </section>
+
+    <!-- ── Step 2: Input ── -->
+    <section class="section card fade-up" style="animation-delay:160ms">
+      <div class="card-title">
+        <span class="icon">📂</span>
+        ขั้นตอนที่ 2 — เพิ่มข้อความ
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs" role="tablist">
+        <button class="tab-btn active" role="tab" data-tab="tab-file">📁 อัปโหลดไฟล์</button>
+        <button class="tab-btn" role="tab" data-tab="tab-text">✏️ พิมพ์ข้อความ</button>
+      </div>
+
+      <!-- Tab: File Upload -->
+      <div id="tab-file" class="tab-panel active">
+        <div class="dropzone" id="dropzone">
+          <input type="file" id="file-input" accept=".txt,.docx" aria-label="อัปโหลดไฟล์เอกสาร" />
+          <span class="dropzone-icon">🗂️</span>
+          <h3>ลากไฟล์มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</h3>
+          <p>รองรับไฟล์ภาษาไทย UTF-8</p>
+          <div class="file-types">
+            <span class="file-badge">.txt</span>
+            <span class="file-badge">.docx</span>
+          </div>
+        </div>
+
+        <!-- File info row -->
+        <div class="file-info" id="file-info">
+          <span class="file-icon" id="file-icon-display">📄</span>
+          <div class="file-details">
+            <div class="file-name" id="file-name-display">—</div>
+            <div class="file-meta" id="file-meta-display">—</div>
+          </div>
+          <button class="remove-btn" id="remove-file-btn" type="button">✕ ลบ</button>
+        </div>
+      </div>
+
+      <!-- Tab: Manual Text -->
+      <div id="tab-text" class="tab-panel">
+        <label for="manual-text">ใส่ข้อความภาษาไทย</label>
+        <textarea id="manual-text" placeholder="พิมพ์หรือวางข้อความภาษาไทยของคุณที่นี่…" rows="8"
+          oninput="updateChunkPreview()"></textarea>
+      </div>
+
+      <!-- Status message -->
+      <div class="status-msg" id="status-msg" role="alert"></div>
+
+      <!-- Progress bar -->
+      <div class="progress-wrap" id="progress-wrap">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+      <div class="progress-label" id="progress-label"></div>
+
+      <!-- Action bar -->
+      <div class="action-bar">
+        <div class="action-bar-left">
+          <span id="chunk-preview-count" style="font-size:13px;color:var(--text-muted)"></span>
+        </div>
+        <button class="btn btn-primary btn-lg" id="embed-btn" type="button">
+          ✨ สร้าง Embeddings &amp; บันทึก
+        </button>
+      </div>
+    </section>
+
+    <!-- ── Step 3: Results ── -->
+    <section class="section results-section" id="results-section">
+      <div class="results-header">
+        <h2>📊 ผลลัพธ์ Embeddings</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-secondary" id="copy-json-btn" type="button">📋 คัดลอก JSON</button>
+          <button class="btn btn-secondary" id="download-json-btn" type="button">⬇️ ดาวน์โหลด JSON</button>
+          <button class="btn btn-ghost" id="download-txt-btn" type="button">📝 ดาวน์โหลดข้อความ</button>
+          <a href="chat.html" class="btn btn-primary" style="text-decoration:none;">💬 ทดสอบแชท →</a>
+        </div>
+      </div>
+
+      <!-- Supabase save status -->
+      <div id="save-status" class="save-status"></div>
+
+      <!-- Stats -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-value" id="stat-chunks">—</div>
+          <div class="stat-label">จำนวน Chunks</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-chars">—</div>
+          <div class="stat-label">ตัวอักษรทั้งหมด</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-dims">—</div>
+          <div class="stat-label">มิติ Embedding</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-model" style="font-size:16px;">—</div>
+          <div class="stat-label">Model</div>
+        </div>
+      </div>
+
+      <!-- Chunks list -->
+      <div class="card" style="padding:20px;">
+        <div class="chunks-header">
+          <h3>รายการ Chunks &amp; Embeddings</h3>
+        </div>
+        <div class="chunks-list" id="chunks-list"></div>
+      </div>
+    </section>
+
+    <!-- ── Footer ── -->
+    <footer class="footer">
+      <p>OpenClaw RAG · powered by <strong>phaya.io</strong> Qwen3 Embedding 8B · Vector DB by <strong>Supabase</strong>
+      </p>
+    </footer>
+
+  </div><!-- /.app-wrapper -->
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <script>
+    function toggleChunkSettings() {
+      const el = document.getElementById("chunk-settings");
+      el.style.display = el.style.display === "none" ? "block" : "none";
+    }
+  </script>
+
+</body>
+
+</html>
