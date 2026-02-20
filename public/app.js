@@ -21,8 +21,6 @@ const $ = id => document.getElementById(id);
 
 // ── Init ───────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
-    // Pre-fill API key from config
-    $("api-key").value = AppConfig.defaultApiKey;
     // Show fixed model name
     $("model-display").textContent = `${AppConfig.modelName} (${AppConfig.embeddingDims}d)`;
     // Populate chunk settings
@@ -31,7 +29,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     setupTabs();
     setupDropzone();
-    setupApiKeyToggle();
     setupEventListeners();
     checkSupabaseConnection();
 });
@@ -219,9 +216,6 @@ async function handleEmbed() {
         state.rawText = text;
     }
 
-    const apiKey = $("api-key").value.trim();
-    if (!apiKey) { showStatus("error", "⚠️ กรุณาใส่ API Key ก่อน"); return; }
-
     const chunkSize = parseInt($("chunk-size").value, 10) || AppConfig.chunkSize;
     const chunkOverlap = parseInt($("chunk-overlap").value, 10) || AppConfig.chunkOverlap;
 
@@ -236,7 +230,7 @@ async function handleEmbed() {
     try {
         state.embeddings = [];
         for (let i = 0; i < state.chunks.length; i++) {
-            const emb = await fetchEmbedding(state.chunks[i], apiKey);
+            const emb = await fetchEmbedding(state.chunks[i]);
             state.embeddings.push(emb);
             const pct = Math.round(((i + 1) / state.chunks.length) * 80); // 0–80%
             showProgress(pct, `Chunk ${i + 1} / ${state.chunks.length} — สร้าง embedding แล้ว`);
@@ -275,16 +269,12 @@ function chunkText(text, size, overlap) {
     return chunks;
 }
 
-// ── Fetch embedding from phaya.io ──────────────────
-async function fetchEmbedding(text, apiKey) {
-    const res = await fetch(AppConfig.apiEndpoint, {
+// ── Fetch embedding via Edge Function ──────────────
+async function fetchEmbedding(text) {
+    const res = await fetch(AppConfig.edgeFunctionUrl, {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`,
-        },
-        // phaya.io format: { input: [text] }
-        body: JSON.stringify({ input: [text] }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "embed", input: [text] }),
     });
 
     if (!res.ok) {
@@ -296,9 +286,9 @@ async function fetchEmbedding(text, apiKey) {
 
     const data = await res.json();
 
-    // phaya.io response: { success, data: [{ embedding: [...] }] }
+    // phaya.io response (proxied): { success, data: [{ embedding: [...] }] }
     if (!data.success || !data.data?.[0]?.embedding) {
-        throw new Error("รูปแบบการตอบกลับจาก phaya.io ไม่ถูกต้อง");
+        throw new Error("รูปแบบการตอบกลับจากเซิร์ฟเวอร์ไม่ถูกต้อง");
     }
     return data.data[0].embedding;
 }

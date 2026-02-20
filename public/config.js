@@ -3,9 +3,9 @@
 // ===================================================
 
 const AppConfig = {
-  // ── phaya.io Embedding API ──────────────────────
-  apiEndpoint: "https://api.phaya.io/api/v1/embedding/create",
-  defaultApiKey: "pk_ZalKxKe38QUTVtYQXS0KLOGWENGdwbHCBMVQwU5gajzw1mCN",
+  // ── Supabase Edge Function (CORS-safe proxy) ─────
+  // All embedding calls go through this Edge Function
+  edgeFunctionUrl: "https://rcudhdzgerjxstzegctd.supabase.co/functions/v1/rag",
   modelName: "Qwen3 Embedding 8B",
   embeddingDims: 4096,
 

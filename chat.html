@@ -96,8 +96,6 @@
         // ── Init Supabase ──────────────────────────────
         const { createClient } = window.supabase;
         const db = createClient(AppConfig.supabaseUrl, AppConfig.supabaseAnonKey);
-        const PHAYA_API = AppConfig.apiEndpoint;
-        const PHAYA_KEY = AppConfig.defaultApiKey;
 
         // ── Check DB connection ────────────────────────
         async function checkDb() {
@@ -151,24 +149,23 @@
             document.getElementById("send-btn").disabled = true;
 
             try {
-                // 1. Embed the query
-                const res = await fetch(PHAYA_API, {
+                // Call Edge Function (handles embedding + vector search server-side)
+                const res = await fetch(AppConfig.edgeFunctionUrl, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${PHAYA_KEY}` },
-                    body: JSON.stringify({ input: [query] }),
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        action: "query",
+                        question: query,
+                        top_k: topK,
+                        threshold: threshold,
+                    }),
                 });
-                if (!res.ok) throw new Error(`phaya.io API error: ${res.status}`);
-                const data = await res.json();
-                if (!data.success || !data.data?.[0]?.embedding) throw new Error("Invalid embedding response");
-                const queryEmbedding = data.data[0].embedding;
-
-                // 2. Search Supabase for similar chunks
-                const { data: chunks, error } = await db.rpc("match_chunks", {
-                    query_embedding: queryEmbedding,
-                    match_threshold: threshold,
-                    match_count: topK,
-                });
-                if (error) throw error;
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.error || `Server error: ${res.status}`);
+                }
+                const result = await res.json();
+                const chunks = result.results || [];
 
                 // 3. Build response
                 if (!chunks || chunks.length === 0) {
