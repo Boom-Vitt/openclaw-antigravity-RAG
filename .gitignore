@@ -17,3 +17,5 @@ package-lock.json
 # Secrets backup (never commit raw keys)
 *.env
 .env*
+dist/
+node_modules/
